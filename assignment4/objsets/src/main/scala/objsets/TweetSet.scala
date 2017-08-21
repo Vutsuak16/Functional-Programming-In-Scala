@@ -41,20 +41,22 @@ abstract class TweetSet {
    * Question: Can we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-    def filter(p: Tweet => Boolean): TweetSet = ???
-  
+    def filter(p: Tweet => Boolean): TweetSet = filterAcc(p,new Empty)
+
   /**
    * This is a helper method for `filter` that propagetes the accumulated tweets.
    */
   def filterAcc(p: Tweet => Boolean, acc: TweetSet): TweetSet
 
+
+   def isEmpty: Boolean
   /**
    * Returns a new `TweetSet` that is the union of `TweetSet`s `this` and `that`.
    *
    * Question: Should we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-    def union(that: TweetSet): TweetSet = ???
+    def union(that: TweetSet):TweetSet
   
   /**
    * Returns the tweet from this set which has the greatest retweet count.
@@ -65,7 +67,7 @@ abstract class TweetSet {
    * Question: Should we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-    def mostRetweeted: Tweet = ???
+    def mostRetweeted: Tweet
   
   /**
    * Returns a list containing all tweets of this set, sorted by retweet count
@@ -76,7 +78,16 @@ abstract class TweetSet {
    * Question: Should we implment this method here, or should it remain abstract
    * and be implemented in the subclasses?
    */
-    def descendingByRetweet: TweetList = ???
+    def descendingByRetweet: TweetList = {
+      def loop(in_tweetSet: TweetSet, tl: TweetList): TweetList = {
+        if (in_tweetSet.isEmpty) tl
+        else {
+          val mostPopularTweet = in_tweetSet.mostRetweeted
+          new Cons(mostPopularTweet, loop(in_tweetSet.remove(mostPopularTweet), tl))
+        }
+      }
+      loop(this, Nil)
+    }
   
   /**
    * The following methods are already implemented
@@ -107,8 +118,10 @@ abstract class TweetSet {
 }
 
 class Empty extends TweetSet {
-    def filterAcc(p: Tweet => Boolean, acc: TweetSet): TweetSet = ???
-  
+
+
+    def filterAcc(p: Tweet => Boolean, acc: TweetSet): TweetSet = acc
+    def isEmpty = true
   /**
    * The following methods are already implemented
    */
@@ -117,20 +130,47 @@ class Empty extends TweetSet {
 
   def incl(tweet: Tweet): TweetSet = new NonEmpty(tweet, new Empty, new Empty)
 
+
+
   def remove(tweet: Tweet): TweetSet = this
 
   def foreach(f: Tweet => Unit): Unit = ()
+
+  /**
+    * Returns a new `TweetSet` that is the union of `TweetSet`s `this` and `that`.
+    *
+    * Question: Should we implment this method here, or should it remain abstract
+    * and be implemented in the subclasses?
+    */
+ def union(that: TweetSet) =  that
+
+  /**
+    * Returns the tweet from this set which has the greatest retweet count.
+    *
+    * Calling `mostRetweeted` on an empty set should throw an exception of
+    * type `java.util.NoSuchElementException`.
+    *
+    * Question: Should we implment this method here, or should it remain abstract
+    * and be implemented in the subclasses?
+    */
+   def mostRetweeted = throw new java.util.NoSuchElementException()
 }
 
 class NonEmpty(elem: Tweet, left: TweetSet, right: TweetSet) extends TweetSet {
 
-    def filterAcc(p: Tweet => Boolean, acc: TweetSet): TweetSet = ???
-  
-    
-  /**
+  def filterAcc(p: Tweet => Boolean, acc: TweetSet): TweetSet = {
+    val l = left.filterAcc(p, acc)
+    val r = right.filterAcc(p, acc)
+    val lr = l union r
+    if (p(elem)) lr.incl(elem) else lr
+  }
+
+
+  /*
    * The following methods are already implemented
    */
 
+  def isEmpty = false
   def contains(x: Tweet): Boolean =
     if (x.text < elem.text) left.contains(x)
     else if (elem.text < x.text) right.contains(x)
@@ -152,6 +192,30 @@ class NonEmpty(elem: Tweet, left: TweetSet, right: TweetSet) extends TweetSet {
     left.foreach(f)
     right.foreach(f)
   }
+
+  /**
+    * Returns a new `TweetSet` that is the union of `TweetSet`s `this` and `that`.
+    *
+    * Question: Should we implment this method here, or should it remain abstract
+    * and be implemented in the subclasses?
+    */
+  def union(that: TweetSet): TweetSet = right.union(left.union(that.incl(elem)))
+
+  /**
+    * Returns the tweet from this set which has the greatest retweet count.
+    *
+    * Calling `mostRetweeted` on an empty set should throw an exception of
+    * type `java.util.NoSuchElementException`.
+    *
+    * Question: Should we implment this method here, or should it remain abstract
+    * and be implemented in the subclasses?
+    */
+  def mostRetweeted: Tweet = {
+    val all = right.union(left);
+    val morePopular = all.filter(p => p.retweets > elem.retweets)
+    if (morePopular.isEmpty) elem else morePopular.mostRetweeted
+  }
+
 }
 
 trait TweetList {
@@ -180,14 +244,15 @@ object GoogleVsApple {
   val google = List("android", "Android", "galaxy", "Galaxy", "nexus", "Nexus")
   val apple = List("ios", "iOS", "iphone", "iPhone", "ipad", "iPad")
 
-    lazy val googleTweets: TweetSet = ???
-  lazy val appleTweets: TweetSet = ???
+  def Keywords(words: List[String]) = (t:Tweet) => words.exists( (term) => t.text.contains(term) )
+    lazy val googleTweets: TweetSet =TweetReader.allTweets.filter(Keywords(google))
+  lazy val appleTweets: TweetSet =TweetReader.allTweets.filter(Keywords(apple))
   
   /**
    * A list of all tweets mentioning a keyword from either apple or google,
    * sorted by the number of retweets.
    */
-     lazy val trending: TweetList = ???
+     lazy val trending: TweetList =googleTweets.union(appleTweets).descendingByRetweet
   }
 
 object Main extends App {
